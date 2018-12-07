@@ -1,0 +1,162 @@
+---
+title: "PML Course Project"
+author: "Alvin Alon"
+date: "December 2018"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+#Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+#Libraries-------------------------------------
+#----------------------------------------------
+
+```{r libraries, cache=TRUE, warning=FALSE, message=FALSE}
+library(caret)
+library(rattle)
+```
+
+#Data Load-------------------------------------
+#----------------------------------------------
+
+```{r Data Load, cache=TRUE, warning=FALSE, message=FALSE}
+#Training Dataset
+#-----------------
+TrainData <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"),header=TRUE)
+dim(TrainData)
+
+#Testing Dataset
+#-----------------
+TestData <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"),header=TRUE)
+dim(TestData)
+
+str(TrainData)
+
+```
+
+#Observations----------------------------------
+#----------------------------------------------
+The training data set is made of 19622 observations on 160 columns. We can notice that many columns have NA values or blank values on almost every observation. So we will remove them, because they will not produce any information. The first seven columns give information about the people who did the test, and also timestamps. We will not take them in our model.
+
+#Data Cleaning---------------------------------
+#----------------------------------------------
+```{r}
+# Removing at least 90% of NA or blank values on the training dataset
+# -------------------------------------------------------------------
+
+# Train Dataset
+indColToRemove <- which(colSums(is.na(TrainData) |TrainData=="")>0.9*dim(TrainData)[1]) 
+TrainDataClean <- TrainData[,-indColToRemove]
+TrainDataClean <- TrainDataClean[,-c(1:7)]
+dim(TrainDataClean)
+
+# Test Dataset
+indColToRemove <- which(colSums(is.na(TestData) |TestData=="")>0.9*dim(TestData)[1]) 
+TestDataClean <- TestData[,-indColToRemove]
+TestDataClean <- TestDataClean[,-1]
+dim(TestDataClean)
+
+str(TestDataClean)
+
+```
+#Observations----------------------------------
+#----------------------------------------------
+After cleaning, the new training data set has only 53 columns.
+
+#Splitting of Datasets-------------------------
+#----------------------------------------------
+```{r}
+set.seed(12345)
+inTrain1 <- createDataPartition(TrainDataClean$classe, p=0.75, list=FALSE)
+
+#Train
+Train1 <- TrainDataClean[inTrain1,]
+dim(Train1)
+
+#Test
+Test1 <- TrainDataClean[-inTrain1,]
+dim(Test1)
+```
+
+#Model Training-------------------------
+#----------------------------------------------
+Testing of 3 different models : * classification_tree * random_forest * gradient_boosting_method
+
+In order to limit the effects of overfitting and improve the efficicency of the models,  *cross-validation technique will use a 5 folds (usually, 5 or 10 can be used, but 10 folds gives higher run times with no significant increase of the accuracy).
+
+#Classification Tree
+
+```{r}
+# Classification Tree
+# -------------------
+trControl <- trainControl(method="cv", number=5)
+model_CT <- train(classe~., data=Train1, method="rpart", trControl=trControl)
+
+# Print Classification Tree Model
+fancyRpartPlot(model_CT$finalModel)
+
+# Prediction
+trainpred <- predict(model_CT,newdata=Test1)
+
+#Confusion Matrix
+confMatCT <- confusionMatrix(Test1$classe,trainpred)
+confMatCT$table
+confMatCT$overall[1]
+
+```
+#Observations for Classification Tree (CT)
+We can notice that the accuracy of this CT is very low (about 55%). This means that the outcome class will not be predicted very well by the other predictors.
+
+#Random Forests
+```{r}
+#Random Forests
+model_RF <- train(classe~., data=Train1, method="rf", trControl=trControl, verbose=FALSE)
+print(model_RF)
+
+#Print Random Forests
+plot(model_RF,main="Accuracy of Random forest model by number of predictors")
+
+#Prediction
+trainpred <- predict(model_RF,newdata=Test1)
+
+#Confusion Matrix
+confMatRF <- confusionMatrix(Test1$classe,trainpred)
+confMatRF$table
+confMatRF$overall[1]
+
+```
+#Observations for Random Forests
+With random forest, an accuracy of 99.3% has been using cross-validation with 5 steps.
+
+#Gradient Boosting Method
+```{r}
+#Gradient Boosting Method
+model_GBM <- train(classe~., data=Train1, method="gbm", trControl=trControl, verbose=FALSE)
+print(model_GBM)
+
+#Print Random Forests
+plot(model_GBM)
+
+#Prediction
+trainpred <- predict(model_GBM,newdata=Test1)
+
+#Confusion Matrix
+confMatGBM <- confusionMatrix(Test1$classe,trainpred)
+confMatGBM$table
+confMatGBM$overall[1]
+```
+
+#Observation for Gradient Boosting Method(GBM)
+With GBM, an accuracy of 95.9% has been using cross-validation with 5 folds.
+
+#Conclusion------------------------------------
+#----------------------------------------------
+This shows that the random forest (RF) model is the best one. We will then use RF to predict the values of classe for the test data set.
+```{r}
+FinalTestPred_RF <- predict(model_RF,newdata=TestDataClean)
+FinalTestPred_RF
+```
+
